@@ -47,15 +47,12 @@ class WSServer
             if ($this->setOptions()) {
                 if ($this->bind()) {
                     $this->clients = [$this->socket];
-                    
                     return true;
                 }
             }
-        }
-        else {
+        } else {
             $this->error = 'CREATE_SOCKET_ERROR';
         }
-        
         return false;
     }
     
@@ -64,7 +61,6 @@ class WSServer
         if (socket_set_option($this->socket, SOL_SOCKET, SO_REUSEADDR, 1) === false) {
             return $this->setSocketError();
         }
-        
         return true;
     }
     
@@ -76,10 +72,9 @@ class WSServer
     
     protected function bind()
     {
-        if (socket_bind($this->socket, 0, $port) === false) {
+        if (socket_bind($this->socket, 0, $this->port) === false) {
             return $this->setSocketError();
         }
-        
         return true;
     }
     
@@ -88,7 +83,6 @@ class WSServer
         if (socket_listen($this->socket) === false) {
             return $this->setSocketError();
         }
-        
         return true;
     }
     
@@ -109,21 +103,16 @@ class WSServer
 	$changed = $this->clients;
         if (socket_select($changed, $null, $null, 0, 10) === false) {
             return $this->setSocketError();
-        }
-        else {
-	
+        } else {
             if (in_array($this->socket, $changed)) {
-		
                 if (($socketNew = socket_accept($this->socket)) === false) {
                     return $this->setSocketError();
-                }
-                else {
+                } else {
                     $this->clients[] = $socketNew;
 		
                     if (($header = socket_read($socketNew, 1024)) === false) {
                         return $this->setSocketError();
-                    }
-                    else {
+                    } else {
                         if ($this->handshake($header, $socketNew) === false) {
                             return false;
                         }
@@ -131,12 +120,10 @@ class WSServer
                             if (socket_getpeername($socketNew, $ip) === false) {
                                 $this->error = 'GET_PEERNAME_SOCKET_ERROR';
                                 return false;
-                            }
-                            else {
+                            } else {
                                 if ($this->sendMessage($this->mask(json_encode(['type' => 'system', 'message' => $ip . ' connected']))) === false) {
                                     return false;
-                                }
-                                else {
+                                } else {
                                     $foundSocket = array_search($this->socket, $changed);
                                     unset($changed[$foundSocket]);
                                 }
@@ -147,41 +134,34 @@ class WSServer
             }
 	}
 	
-	foreach ($changed as $changedSocket) {	
-		
+	foreach ($changed as $changedSocket) {
             while (socket_recv($changedSocket, $buffer, 1024, 0) >= 1) {
-                
-                $message        = json_decode($this->unmask($buffer));
-                $userName       = $message->name;
-                $userMessage    = $message->message;
-                $userColor      = $message->color;
+                $message     = json_decode($this->unmask($buffer));
+                $userName    = $message->name;
+                $userMessage = $message->message;
+                $userColor   = $message->color;
 
                 if ($this->sendMessage($this->mask(json_encode(['type' => 'usermsg', 'name' => $userName, 'message' => $userMessage, 'color' => $userColor]))) === false) {
                     return false;
-                }
-                else {
+                } else {
                     break(2);
                 }
             }
 		
             $buffer = socket_read($changedSocket, 1024, PHP_NORMAL_READ);
             if ($buf === false) {
-                    
                 $foundSocket = array_search($changedSocket, $this->clients);
                 if (socket_getpeername($changedSocket, $ip) === false) {
                     $this->error = 'GET_PEERNAME_SOCKET_ERROR';
                     return false;
-                }
-                else {
+                } else {
                     unset($this->clients[$foundSocket]);
                 }
-
                 if ($this->sendMessage($this->mask(json_encode(['type' => 'system', 'message' => $ip .' disconnected']))) === false) {
                     return false;
                 }
             }
 	}
-        
         $this->serve();
     }
     
@@ -192,7 +172,6 @@ class WSServer
                 return $this->setSocketError();
             }
 	}
-        
 	return true;
     }
     
@@ -203,14 +182,11 @@ class WSServer
 	
 	if ($length <= 125) {
             $header = pack('CC', $b1, $length);
-        }
-	elseif ($length > 125 && $length < 65536) {
+        } elseif ($length > 125 && $length < 65536) {
             $header = pack('CCn', $b1, 126, $length);
-        }
-	elseif ($length >= 65536) {
+        } elseif ($length >= 65536) {
             $header = pack('CCNN', $b1, 127, $length);
         }
-        
 	return $header . $text;
 }
 
@@ -221,12 +197,10 @@ class WSServer
         if ($length == 126) {
             $masks = substr($text, 4, 4);
             $data = substr($text, 8);
-	}
-	elseif ($length == 127) {
+	} elseif ($length == 127) {
             $masks = substr($text, 10, 4);
             $data = substr($text, 14);
-	}
-	else {
+	} else {
             $masks = substr($text, 2, 4);
             $data = substr($text, 6);
 	}
@@ -235,7 +209,6 @@ class WSServer
 	for ($i = 0; $i < strlen($data); ++$i) {
             $text .= $data[$i] ^ $masks[$i % 4];
 	}
-	
         return $text;
     }
     
@@ -250,20 +223,19 @@ class WSServer
             }
 	}
 
-	$secKey     = $headers['Sec-WebSocket-Key'];
-	$secAccept  = base64_encode(pack('H*', sha1($secKey . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')));
+	$secKey    = $headers['Sec-WebSocket-Key'];
+	$secAccept = base64_encode(pack('H*', sha1($secKey . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')));
 	
-	$upgrade    = "HTTP/1.1 101 Web Socket Protocol Handshake\r\n" .
-	"Upgrade: websocket\r\n" .
-	"Connection: Upgrade\r\n" .
-	"WebSocket-Origin: " . $this->host . "\r\n" .
-	"WebSocket-Location: ws://" . $this->host . ":" . $this->port . "\r\n".
-	"Sec-WebSocket-Accept: $secAccept\r\n\r\n";
+	$upgrade = "HTTP/1.1 101 Web Socket Protocol Handshake\r\n"
+		. "Upgrade: websocket\r\n"
+		. "Connection: Upgrade\r\n"
+		. "WebSocket-Origin: " . $this->host . "\r\n"
+		. "WebSocket-Location: ws://" . $this->host . ":" . $this->port . "\r\n"
+		. "Sec-WebSocket-Accept: $secAccept\r\n\r\n";
         
         if (socket_write($clientConnection, $upgrade, strlen($upgrade)) === false) {
             return $this->setSocketError();
         }
-        
         return true;
     }
 }
